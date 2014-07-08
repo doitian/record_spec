@@ -75,10 +75,18 @@
        ).
 
 parse_transform(Forms, _Options) ->
+    AllRef = make_ref(),
     Ctx = lists:foldl(
             fun({attribute, _, export_record_spec, Records} = Form,
                 #context{ export_records = OldRecords } = CtxAcc) ->
-                    CtxAcc#context{ export_records = [Records | OldRecords],
+                    NewRecords = [
+                                  case Records of
+                                      all -> [AllRef];
+                                      _ -> Records
+                                  end
+                                  | OldRecords
+                                 ],
+                    CtxAcc#context{ export_records = NewRecords,
                                     last_export_form = Form };
                ({attribute, _, type, {{record, Record}, TypeSpec, _}},
                 #context{ records = Dict } = CtxAcc) ->
@@ -90,6 +98,11 @@ parse_transform(Forms, _Options) ->
            ),
     LastForm = Ctx#context.last_export_form,
     AllRecordDict = Ctx#context.records,
+    ExportRecords0 = lists:flatten(Ctx#context.export_records),
+    ExportRecords = case lists:member(AllRef, ExportRecords0) of
+                        true -> dict:fetch_keys(AllRecordDict);
+                        false -> ExportRecords0
+                    end,
 
     ExportDict = lists:foldl(
                    fun(Record, Dict) ->
@@ -100,7 +113,7 @@ parse_transform(Forms, _Options) ->
                            end
                    end,
                    dict:new(),
-                   lists:flatten(Ctx#context.export_records)
+                   ExportRecords
                   ),
     lists:append(
       lists:map(
