@@ -1,0 +1,20 @@
+.eunit
+deps
+*.o
+*.beam
+*.plt
+erl_crash.dump
+/rel/wu_server
+/doc
+.idea
+/ebin
+/log
+/logs
+/eunit.coverage.xml
+
+# ignore developer local test files
+yyc*
+xwj*
+zy*
+gxf*
+zjl*

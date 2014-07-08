@@ -1,0 +1,11 @@
+{application, record_spec,
+ [
+  {description, "Export function record_info/1 and record_info/2 to expose record information."},
+  {vsn, git},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {env, []}
+ ]}.
