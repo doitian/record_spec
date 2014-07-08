@@ -40,5 +40,7 @@ record_spec_test_() ->
      ?_assertEqual({age, 2, {union, [undefined, {integer, []}]}}, element(2, UserRecordInfo)),
      ?_assertEqual(2, tuple_size(GroupRecordInfo)),
      ?_assertEqual({name, 1, {union, [undefined, {binary, []}]}}, element(1, GroupRecordInfo)),
-     ?_assertEqual({users, 2, {union, [undefined, {list, [{record, [user]}]}]}}, element(2, GroupRecordInfo))
+     ?_assertEqual({users, 2, {union, [undefined, {list, [{record, [user]}]}]}}, element(2, GroupRecordInfo)),
+     ?_assertThrow({record_spec_not_found, [user, users]}, record_spec(user, users)),
+     ?_assertThrow({record_spec_not_found, [server]}, record_spec(server))
     ].

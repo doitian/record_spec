@@ -1,10 +1,11 @@
 %%%-------------------------------------------------------------------
-%%% @doc Generate record_spec/1 and record_spec/2
+%%% @doc Generate  `find_record_spec/1', `find_record_spec/2', `record_spec/1' and `record_spec/2'
 %%%
-%%% Export record_spec to be used in runtime.
+%%% Export records information so they can be used in runtime.
 %%%
 %%% Example, following code
 %%%
+%%% ```
 %%%     -record(user, { name = <<>> :: binary(),
 %%%                     age = 0 :: integer()
 %%%                   }).
@@ -14,25 +15,51 @@
 %%%                    }).
 %%%     
 %%%     -export_record_spec([user, group])
+%%% '''
 %%%
 %%% when complied with this parse transform, will generate following functions
 %%%
-%%%    -export([record_spec/1, record_spec/2]).
-%%%    record_spec(user) ->
+%%% ```
+%%%    -export([find_record_spec/1, find_record_spec/2, record_spec/1, record_spec/2]).
+%%%    -spec find_record_spec(atom()) -> {ok, record_spec:record_spec()} | error.
+%%%    find_record_spec(user) ->
 %%%        {
-%%%          {name, 1, {binary, []}},
-%%%          {age, 2, {integer, []}}
+%%%          ok,
+%%%          {
+%%%            {name, 1, {binary, []}},
+%%%            {age, 2, {integer, []}}
+%%%          }
 %%%        };
-%%%    record_spec(group) ->
+%%%    find_record_spec(group) ->
 %%%        {
-%%%          {name, 1, {binary, []}},
-%%%          {users, 2, {list, [{record, [user]}]}}
-%%%        }.
+%%%          ok,
+%%%          {
+%%%            {name, 1, {binary, []}},
+%%%            {users, 2, {list, [{record, [user]}]}}
+%%%          }
+%%%        };
+%%%    find_record_spec(_) -> error.
 %%%    
-%%%    record_spec(user, name) -> {name, 1, binary};
-%%%    record_spec(user, age) -> {age, 2, integer};
-%%%    record_spec(group, name) -> {name, 1, binary};
-%%%    record_spec(group, users) -> {users, 2, {list, [{record, user}]}}.
+%%%    -spec find_record_spec(atom(), atom()) -> {ok, record_spec:field_spec()} | error.
+%%%    find_record_spec(user, name) -> {ok, {name, 1, binary}};
+%%%    find_record_spec(user, age) -> {ok, {age, 2, integer}};
+%%%    find_record_spec(group, name) -> {ok, {name, 1, binary}};
+%%%    find_record_spec(group, users) -> {ok, {users, 2, {list, [{record, user}]}}};
+%%%    find_record_spec(_, _) -> error.
+%%%    
+%%%    -spec record_spec(atom()) -> record_spec:record_spec().
+%%%    record_spec(Record) ->
+%%%        case find_record_spec(Record) of
+%%%            {ok, Value} -> Value;
+%%%            error -> throw({record_spec_not_found, [Record]})
+%%%        end.
+%%%    -spec record_spec(atom(), atom()) -> record_spec:field_spec().
+%%%    record_spec(Record, Field) ->
+%%%        case find_record_spec(Record, Field) of
+%%%            {ok, Value} -> Value;
+%%%            error -> throw({record_spec_not_found, [Record, Field]})
+%%%    end.
+%%% '''
 %%% @end
 %%%-------------------------------------------------------------------
 -module(record_spec_parse_trans).
@@ -99,8 +126,9 @@ format_error(E) ->
 %%% ==================================================================
 
 generate_fun(Line, ExportDict) ->
-    Export = {attribute,Line,export,[{record_spec,1},{record_spec,2}]},
-    {RecordSpec1Clauses, DeepRecordSpec2Clauses} =
+    Export = {attribute,Line,export,[{find_record_spec,1},{find_record_spec,2},{record_spec,1},{record_spec,2}]},
+
+    {FindRecordSpec1Clauses, DeepFindRecordSpec2Clauses} =
         dict:fold(
           fun(Record, Types, {Forms1, Forms2}) ->
                   TypesSpec = generate_types(Line, Types),
@@ -108,14 +136,18 @@ generate_fun(Line, ExportDict) ->
                       {clause,Line,
                        [{atom,Line,Record}],
                        [],
-                       [{tuple,Line,TypesSpec}]},
+                       [{tuple,Line,
+                         [{atom,Line,ok},
+                          {tuple,Line,TypesSpec}]}]},
                   Clauses2 =
                       lists:map(
                         fun({tuple,_,[{atom,_,Field}|_]} = TypeSpec) ->
                                 {clause,Line,
                                  [{atom,Line,Record},{atom,Line,Field}],
                                  [],
-                                 [TypeSpec]}
+                                 [{tuple,Line,
+                                   [{atom,Line,ok},
+                                    TypeSpec]}]}
                         end,
                         TypesSpec
                        ),
@@ -124,10 +156,77 @@ generate_fun(Line, ExportDict) ->
           {[], []},
           ExportDict
          ),
-    RecordSpec1 = {function,Line,record_spec,1,RecordSpec1Clauses},
-    RecordSpec2 = {function,Line,record_spec,2,lists:append(DeepRecordSpec2Clauses)},
-
-    [Export, RecordSpec1, RecordSpec2].
+    FindRecordSpec1 = {function,Line,find_record_spec,1,
+                       lists:reverse(
+                         [
+                          {clause,Line,
+                           [{var,Line,'_'}],
+                           [],
+                           [{atom,Line,error}]
+                          }
+                          | FindRecordSpec1Clauses
+                         ]
+                        )
+                  },
+    FindRecordSpec2 = {function,Line,find_record_spec,2,
+                   lists:reverse(
+                     [
+                      {clause,Line,
+                       [{var,Line,'_'},{var,Line,'_'}],
+                       [],
+                       [{atom,Line,error}]
+                      }
+                      | lists:append(DeepFindRecordSpec2Clauses)
+                     ]
+                    )
+                  },
+    RecordSpec1 = {function,Line,record_spec,1,
+                   [{clause,Line,
+                     [{var,Line,'Record'}],
+                     [],
+                     [{'case',Line,
+                       {call,Line,
+                        {atom,Line,find_record_spec},
+                        [{var,Line,'Record'}]},
+                       [{clause,Line,
+                         [{tuple,Line,[{atom,Line,ok},{var,Line,'Value'}]}],
+                         [],
+                         [{var,Line,'Value'}]},
+                        {clause,Line,
+                         [{atom,Line,error}],
+                         [],
+                         [{call,Line,
+                           {atom,Line,throw},
+                           [{tuple,Line,
+                             [{atom,Line,record_spec_not_found},
+                              {cons,Line,
+                               {var,Line,'Record'},
+                               {nil,Line}}]
+                            }]}]}]}]}]},
+    RecordSpec2 = {function,Line,record_spec,2,
+                   [{clause,Line,
+                     [{var,Line,'Record'},{var,Line,'Field'}],
+                     [],
+                     [{'case',Line,
+                       {call,Line,
+                        {atom,Line,find_record_spec},
+                        [{var,Line,'Record'},{var,Line,'Field'}]},
+                       [{clause,Line,
+                         [{tuple,Line,[{atom,Line,ok},{var,Line,'Value'}]}],
+                         [],
+                         [{var,Line,'Value'}]},
+                        {clause,Line,
+                         [{atom,Line,error}],
+                         [],
+                         [{call,Line,
+                           {atom,Line,throw},
+                           [{tuple,Line,
+                             [{atom,Line,record_spec_not_found},
+                              {cons,Line,
+                               {var,Line,'Record'},
+                               {cons,Line,{var,Line,'Field'},{nil,Line}}}]}]}]}]}]}]},
+    %% io:format("~p", [[Export, FindRecordSpec1, FindRecordSpec2, RecordSpec1, RecordSpec2]]),
+    [Export, FindRecordSpec1, FindRecordSpec2, RecordSpec1, RecordSpec2].
 
 generate_type(Line, Pos, {typed_record_field, RecordField, TypeSpec}) ->
     {tuple,Line,[{atom,Line,get_record_field_name(RecordField)},
