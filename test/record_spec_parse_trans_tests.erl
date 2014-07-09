@@ -47,3 +47,7 @@ record_spec_test_() ->
 
 record_new_test() ->
     ?assertEqual(#user{}, record_new(user)).
+
+to_list_test() ->
+    ?assertEqual([{name, <<"ian">>}, {age, 30}],
+                 record_spec:to_list(?MODULE, #user{name = <<"ian">>, age = 30})).
