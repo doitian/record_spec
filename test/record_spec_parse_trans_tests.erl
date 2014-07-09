@@ -44,3 +44,6 @@ record_spec_test_() ->
      ?_assertThrow({record_spec_not_found, [user, users]}, record_spec(user, users)),
      ?_assertThrow({record_spec_not_found, [server]}, record_spec(server))
     ].
+
+record_new_test() ->
+    ?assertEqual(#user{}, record_new(user)).

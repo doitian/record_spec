@@ -63,6 +63,10 @@
 %%%            {ok, Value} -> Value;
 %%%            error -> throw({record_spec_not_found, [Record, Field]})
 %%%    end.
+%%%
+%%%    -spec record_new(atom()) -> #user{} | #group{}.
+%%%    record_new(user) -> #user{};
+%%%    record_new(group) -> #group{}.
 %%% '''
 %%% @end
 %%%-------------------------------------------------------------------
@@ -147,7 +151,7 @@ format_error(E) ->
 %%% ==================================================================
 
 generate_fun(Module, Line, ExportDict) ->
-    Export = {attribute,Line,export,[{find_record_spec,1},{find_record_spec,2},{record_spec,0},{record_spec,1},{record_spec,2}]},
+    Export = {attribute,Line,export,[{find_record_spec,1},{find_record_spec,2},{record_spec,0},{record_spec,1},{record_spec,2},{record_new,1}]},
 
     {FindRecordSpec1Clauses, DeepFindRecordSpec2Clauses} =
         dict:fold(
@@ -263,8 +267,15 @@ generate_fun(Module, Line, ExportDict) ->
                               {cons,Line,
                                {var,Line,'Record'},
                                {cons,Line,{var,Line,'Field'},{nil,Line}}}]}]}]}]}]}]},
+    RecordNew1 = {function,Line,record_new,1,
+                  lists:map(
+                    fun(Record) ->
+                            {clause,Line,[{atom,Line,Record}],[],[{record,Line,Record,[]}]}
+                    end,
+                    dict:fetch_keys(ExportDict)
+                   )},
     %% io:format("~p", [[Export, FindRecordSpec1, FindRecordSpec2, RecordSpec1, RecordSpec2]]),
-    [Export, FindRecordSpec1, FindRecordSpec2, RecordSpec0, RecordSpec1, RecordSpec2].
+    [Export, FindRecordSpec1, FindRecordSpec2, RecordSpec0, RecordSpec1, RecordSpec2, RecordNew1].
 
 generate_type(Module, Line, Pos, {typed_record_field, RecordField, TypeSpec}) ->
     {tuple,Line,[{atom,Line,get_record_field_name(RecordField)},
