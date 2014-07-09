@@ -74,14 +74,17 @@
         {
           records = dict:new(),
           export_records = [],
-          last_export_form
+          last_export_form,
+          module
         }
        ).
 
 parse_transform(Forms, _Options) ->
     AllRef = make_ref(),
     Ctx = lists:foldl(
-            fun({attribute, _, export_record_spec, Records} = Form,
+            fun({attribute, _, module, Module}, CtxAcc) ->
+                    CtxAcc#context{ module = Module };
+               ({attribute, _, export_record_spec, Records} = Form,
                 #context{ export_records = OldRecords } = CtxAcc) ->
                     NewRecords = [
                                   case Records of
@@ -100,6 +103,7 @@ parse_transform(Forms, _Options) ->
             #context{},
             Forms
            ),
+    Module = Ctx#context.module,
     LastForm = Ctx#context.last_export_form,
     AllRecordDict = Ctx#context.records,
     ExportRecords0 = lists:flatten(Ctx#context.export_records),
@@ -122,7 +126,7 @@ parse_transform(Forms, _Options) ->
     lists:append(
       lists:map(
         fun({attribute, Line, export_record_spec, _} = Form) when Form =:= LastForm ->
-                [ Form | generate_fun(Line, ExportDict) ];
+                [ Form | generate_fun(Module, Line, ExportDict) ];
            (Form) ->
                 [Form]
         end,
@@ -142,13 +146,13 @@ format_error(E) ->
 %%% Private Functions
 %%% ==================================================================
 
-generate_fun(Line, ExportDict) ->
+generate_fun(Module, Line, ExportDict) ->
     Export = {attribute,Line,export,[{find_record_spec,1},{find_record_spec,2},{record_spec,0},{record_spec,1},{record_spec,2}]},
 
     {FindRecordSpec1Clauses, DeepFindRecordSpec2Clauses} =
         dict:fold(
           fun(Record, Types, {Forms1, Forms2}) ->
-                  TypesSpec = generate_types(Line, Types),
+                  TypesSpec = generate_types(Module, Line, Types),
                   Clause1 =
                       {clause,Line,
                        [{atom,Line,Record}],
@@ -262,17 +266,17 @@ generate_fun(Line, ExportDict) ->
     %% io:format("~p", [[Export, FindRecordSpec1, FindRecordSpec2, RecordSpec1, RecordSpec2]]),
     [Export, FindRecordSpec1, FindRecordSpec2, RecordSpec0, RecordSpec1, RecordSpec2].
 
-generate_type(Line, Pos, {typed_record_field, RecordField, TypeSpec}) ->
+generate_type(Module, Line, Pos, {typed_record_field, RecordField, TypeSpec}) ->
     {tuple,Line,[{atom,Line,get_record_field_name(RecordField)},
-                 {integer,Line,Pos},generate_type(Line, TypeSpec)]};
-generate_type(Line, Pos, RecordField) ->
+                 {integer,Line,Pos},generate_type(Module, Line, TypeSpec)]};
+generate_type(_Module, Line, Pos, RecordField) ->
     {tuple,Line,[{atom,Line,get_record_field_name(RecordField)},
                  {integer,Line,Pos},
                  {atom,Line,any}]}.
 
-generate_types(Line, Types) ->
+generate_types(Module, Line, Types) ->
     lists:zipwith(
-      fun(T, Pos) -> generate_type(Line, Pos, T) end,
+      fun(T, Pos) -> generate_type(Module, Line, Pos, T) end,
       Types,
       lists:seq(1, length(Types))
      ).
@@ -281,30 +285,43 @@ get_record_field_name(RecordField) ->
     {atom , _, Name} = element(3, RecordField),
     Name.
 
-generate_type(Line, {atom, _, Atom}) ->
+generate_type(_Module, Line, {atom, _, Atom}) ->
     {atom, Line, Atom};
-generate_type(Line, {type, _, Type, Types}) when is_list(Types) ->
+generate_type(Module, Line, {type, _, record, [{atom, _, Record}]}) ->
+    { tuple, Line,
+      [
+       {atom, Line, record},
+       {cons, Line,
+        {atom, Line, Module},
+        {cons, Line,
+         {atom, Line, Record},
+         {nil, Line}
+        }
+       }
+      ]
+    };
+generate_type(Module, Line, {type, _, Type, Types}) when is_list(Types) ->
     { tuple, Line,
       [
        {atom, Line, Type},
-       generate_type_map(Line, Types)
+       generate_type_map(Module, Line, Types)
       ]
     };
-generate_type(Line, {remote_type, _, [{atom, _, M}, {atom, _, F}, A]}) ->
+generate_type(Module, Line, {remote_type, _, [{atom, _, M}, {atom, _, F}, A]}) ->
     { tuple, Line,
       [
        {atom, Line, M},
        {atom, Line, F},
-       generate_type_map(Line, A)
+       generate_type_map(Module, Line, A)
       ]
     }.
 
-generate_type_map(Line, Types) ->
+generate_type_map(Module, Line, Types) ->
     lists:foldr(
       fun(Type, Cons) ->
               { cons,
                 Line,
-                generate_type(Line, Type),
+                generate_type(Module, Line, Type),
                 Cons }
       end,
       {nil, Line},
