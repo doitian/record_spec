@@ -1,5 +1,5 @@
 %%%-------------------------------------------------------------------
-%%% @doc Generate  `find_record_spec/1', `find_record_spec/2', `record_spec/1' and `record_spec/2'
+%%% @doc Generate  `find_record_spec/1', `find_record_spec/2', `record_spec/0', `record_spec/1' and `record_spec/2'.
 %%%
 %%% Export records information so they can be used in runtime.
 %%%
@@ -20,7 +20,7 @@
 %%% when complied with this parse transform, will generate following functions
 %%%
 %%% ```
-%%%    -export([find_record_spec/1, find_record_spec/2, record_spec/1, record_spec/2]).
+%%%    -export([find_record_spec/1, find_record_spec/2, record_spec/0, record_spec/1, record_spec/2]).
 %%%    -spec find_record_spec(atom()) -> {ok, record_spec:record_spec()} | error.
 %%%    find_record_spec(user) ->
 %%%        {
@@ -46,7 +46,11 @@
 %%%    find_record_spec(group, name) -> {ok, {name, 1, binary}};
 %%%    find_record_spec(group, users) -> {ok, {users, 2, {list, [{record, user}]}}};
 %%%    find_record_spec(_, _) -> error.
-%%%    
+%%%
+%%%    -spec record_spec() -> [atom()].
+%%%    record_spec() ->
+%%%        [user, group].
+%%%
 %%%    -spec record_spec(atom()) -> record_spec:record_spec().
 %%%    record_spec(Record) ->
 %%%        case find_record_spec(Record) of
@@ -139,7 +143,7 @@ format_error(E) ->
 %%% ==================================================================
 
 generate_fun(Line, ExportDict) ->
-    Export = {attribute,Line,export,[{find_record_spec,1},{find_record_spec,2},{record_spec,1},{record_spec,2}]},
+    Export = {attribute,Line,export,[{find_record_spec,1},{find_record_spec,2},{record_spec,0},{record_spec,1},{record_spec,2}]},
 
     {FindRecordSpec1Clauses, DeepFindRecordSpec2Clauses} =
         dict:fold(
@@ -193,6 +197,23 @@ generate_fun(Line, ExportDict) ->
                      ]
                     )
                   },
+    RecordSpec0 = {function,Line,record_spec,0,
+                   [{clause,Line,
+                     [],
+                     [],
+                     [
+                      lists:foldr(
+                        fun(Record, Cons) ->
+                                { cons,
+                                  Line,
+                                  {atom, Line, Record},
+                                  Cons
+                                }
+                        end,
+                        {nil, Line},
+                        dict:fetch_keys(ExportDict)
+                       )
+                     ]}]},
     RecordSpec1 = {function,Line,record_spec,1,
                    [{clause,Line,
                      [{var,Line,'Record'}],
@@ -239,7 +260,7 @@ generate_fun(Line, ExportDict) ->
                                {var,Line,'Record'},
                                {cons,Line,{var,Line,'Field'},{nil,Line}}}]}]}]}]}]}]},
     %% io:format("~p", [[Export, FindRecordSpec1, FindRecordSpec2, RecordSpec1, RecordSpec2]]),
-    [Export, FindRecordSpec1, FindRecordSpec2, RecordSpec1, RecordSpec2].
+    [Export, FindRecordSpec1, FindRecordSpec2, RecordSpec0, RecordSpec1, RecordSpec2].
 
 generate_type(Line, Pos, {typed_record_field, RecordField, TypeSpec}) ->
     {tuple,Line,[{atom,Line,get_record_field_name(RecordField)},
