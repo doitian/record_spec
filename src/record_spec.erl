@@ -31,15 +31,15 @@ to_list(Module, Record) when is_atom(Module) andalso is_tuple(Record) ->
      ).
 
 %% @doc Get record field value by name. Throws exception when Key not found.
--spec get_value(module(), atom(), record()) -> term() | no_return().
-get_value(Module, Key, Record) ->
+-spec get_value(module(), record(), atom()) -> term() | no_return().
+get_value(Module, Record, Key) ->
     {_, Pos, _} = Module:record_spec(element(1, Record), Key),
     element(Pos + 1, Record).
 
 %% @doc Get record field value by name with default value. Return default
 %% value even if the Key not found.
--spec get_value(module(), atom(), term(), record()) -> term().
-get_value(Module, Key, Default, Record) ->
+-spec get_value(module(), record(), atom(), term()) -> term().
+get_value(Module, Record, Key, Default) ->
     case Module:find_record_spec(element(1, Record), Key) of
         {ok, {_, Pos, _}} ->
             case element(Pos + 1, Record) of
@@ -50,7 +50,7 @@ get_value(Module, Key, Default, Record) ->
     end.
 
 %% @doc Set record value by field name.
--spec set_value(module(), atom(), term(), record()) -> record().
-set_value(Module, Key, Value, Record) ->
+-spec set_value(module(), record(), term(), atom()) -> record().
+set_value(Module, Record, Key, Value) ->
     {_, Pos, _} = Module:record_spec(element(1, Record), Key),
     setelement(Pos + 1, Record, Value).

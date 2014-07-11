@@ -54,7 +54,7 @@ to_list_test() ->
 
 get_set_value_test() ->
     User = #user{},
-    User1 = record_spec:set_value(?MODULE, age, 18, User),
-    ?assertEqual(18, record_spec:get_value(?MODULE, age, User1)).
+    User1 = record_spec:set_value(?MODULE, User, age, 18),
+    ?assertEqual(18, record_spec:get_value(?MODULE, User1, age)).
 
 
