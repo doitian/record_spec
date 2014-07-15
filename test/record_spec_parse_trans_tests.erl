@@ -4,7 +4,10 @@
 -include("./test_helpers.hrl").
 
 -record(user, { name :: binary(),
-                age :: integer() }).
+                age :: integer(),
+                '$private',
+                birth
+              }).
 
 -record(group, { name :: binary(),
                  users :: [#user{}] }).

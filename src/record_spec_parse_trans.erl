@@ -99,9 +99,9 @@ parse_transform(Forms, _Options) ->
                                  ],
                     CtxAcc#context{ export_records = NewRecords,
                                     last_export_form = Form };
-               ({attribute, _, type, {{record, Record}, TypeSpec, _}},
+               ({attribute, _, type, {{record, Record}, TypeSpecs, _}},
                 #context{ records = Dict } = CtxAcc) ->
-                    CtxAcc#context{ records = dict:store(Record, TypeSpec, Dict) };
+                    CtxAcc#context{ records = dict:store(Record, lists:takewhile(fun is_public_field/1, TypeSpecs), Dict) };
                (_, CtxAcc) -> CtxAcc
             end,
             #context{},
@@ -338,3 +338,13 @@ generate_type_map(Module, Line, Types) ->
       {nil, Line},
       Types
      ).
+
+%% filter_type_specs(Specs) ->
+
+is_public_field({typed_record_field, RecordField, _}) -> 
+    is_public_field(RecordField);
+is_public_field(RecordField) ->
+    case get_record_field_name(RecordField) of
+        '$private' -> false;
+        _ -> true
+    end.
